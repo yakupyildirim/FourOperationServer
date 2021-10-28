@@ -173,7 +173,7 @@ io.on("connection", socket => {
 
 console.log("am i running");
 
-const port =  3000;
+port = process.env.PORT || 3000
 
 
 console.log(port);
