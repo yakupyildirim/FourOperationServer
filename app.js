@@ -2,13 +2,11 @@
 global.DEV_GLOBAL = {};
 const server = require("./server");
 const io = require("./io");
-//const { joinLobby, leaveLobby } = require("./state/lobby");
-const { createGameRoom, playerTurn, rematch } = require("./state/gameRooms");
 const uuid = require("uuidv4").default;
 
 var lobby = [];
 var rooms = {};
-
+  
 const joinLobby = (socket, username) => {
   console.log('username geldi ' + username)
   if (lobby.filter(x=>x.id == socket.id).length == 0) {
@@ -33,8 +31,8 @@ const lobbyUsers = () =>{
 };
 
 
-const createRoom = (roomName, socket) =>{
-  console.log('createRoom:' + roomName)
+function createRoom(socket){
+  var roomName = 'room-' + socket.id;
   const room = {
     id:uuid(),
     name: roomName,
@@ -43,24 +41,26 @@ const createRoom = (roomName, socket) =>{
     winnerId: null
   };
   rooms[room.id] = room;
-  joinRoom(socket, room)
+  socket.join(roomName)
+  console.log('socket:' + socket.id +' joined room-' + socket.id)
+
+  return room.id;
+
+  //joinRoom(socket, room)
 };
 
-
+/*
 const joinRoom = (socket, room) =>{
-  console.log('room id:' + room.id);
-  console.log('room sockets:' + room.sockets);
   room.sockets.push(socket);
-
-  console.log('joinRoom push ok:' + room.sockets[0]);
 
   socket.join(room.id, ()=> {
     socket.roomId = room.id;
-    console.log(socket.id, "Joined", room.id);
+    console.log(socket.id, "Joined:", room.id);
   });
   console.log('joinRoom çıktı:');
 
 }
+*/
 
 const leaveRooms = (socket) => {
   const roomsToDelete = [];
@@ -87,12 +87,13 @@ const leaveRooms = (socket) => {
 io.on("connection", socket => {
   console.log('user connected' + socket.id)
 
-
+/*
   socket.on('joinRoom', (roomId)=>{
     const room = rooms[roomId];
     joinRoom(socket, room);
     //callback();
   });
+*/
 
   socket.on('leaveRoom', ()=>{
     leaveRooms(socket);
@@ -124,12 +125,12 @@ io.on("connection", socket => {
   socket.on("c2s-send-invite", ({ guestId }) => {
     console.log("TCL: guestId", guestId);
 
-    createRoom('room-' + socket.id, socket);
+    var createdRoom = createRoom(socket);
     // send the user object
     io.to(guestId).emit("s2c-receive-invite", {
       hostId: socket.id,
-      hostUsername: "TODO",//clientToUsername[socket.id]
-      roomId: socket.roomId
+      hostUsername: lobby.filter(x=>x.id == socket.id).map(m=>m.username),
+      roomId: createdRoom
     });
 
   });
@@ -139,16 +140,15 @@ io.on("connection", socket => {
 
     console.log('roomId:' + roomId);
 
-    const roomsx = io.of("/").adapter.rooms;
-    var room = roomsx[roomId];
-
-
-    console.log('room.id:' + room.id);
+    //const roomsx = io.of("/").adapter.rooms;
+    var room = rooms[roomId];
 
     leaveLobby(hostId);
     leaveLobby(socket.id);
 
-    joinRoom(socket, room );
+    socket.join('room-' + hostId);
+
+    //joinRoom(socket, room );
 
     io.to(hostId).emit("s2c-game-room", room);
     io.to(socket.id).emit("s2c-game-room", room);
@@ -160,15 +160,13 @@ io.on("connection", socket => {
     io.to(hostId).emit("s2c-game-room", room);
     io.to(socket.id).emit("s2c-game-room", room);
   });
-
-  socket.on("c2s-player-turn", ({ rowIndex, colIndex }) => {
-    // console.log("TCL: rowIndex, colIndex", rowIndex, colIndex);
-    playerTurn({ cid: socket.id, rowIndex, colIndex });
-  });
+ 
 
   socket.on("c2s-rematch", () => {
     rematch(socket.id);
   });
+
+
 });
 
 console.log("am i running");
